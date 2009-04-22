@@ -1,0 +1,2 @@
+module ActiveSchema
+end
