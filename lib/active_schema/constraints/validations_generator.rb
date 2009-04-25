@@ -62,6 +62,10 @@ module ActiveSchema
         columns = model.columns_hash
         model.reflect_on_all_associations(:belongs_to).each do |association|
           column = columns[association.primary_key_name]
+          unless column
+            puts "FAILED: invalid association #{association.primary_key_name} on #{model}"
+            next
+          end
           next unless should_validate? column
           # NOT NULL constraints
           if column.required_on
