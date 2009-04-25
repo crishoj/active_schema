@@ -1,5 +1,6 @@
 module ActiveSchema
   class CodeGenerator
+    extend ActiveSupport::Memoizable
     
     def initialize
       @declarations = {}
@@ -12,35 +13,10 @@ module ActiveSchema
     def regenerate
       puts "Loading models..."
       load_models ["#{RAILS_ROOT}/app/models/"]
-      models = ::ActiveRecord::Base.send(:subclasses)
-      puts "#{models.size} ActiveRecord subclasses:\n  #{models.map(&:name).sort.to_sentence}"
-      models = models.collect { |model| is_sti?(model) ? model.base_class : model }
-      puts "#{models.size} base class models:\n  #{models.map(&:name).sort.to_sentence}"
-      models = models.find_all { |model| model.table_exists? }
-      puts "#{models.size} models with tables:\n  #{models.map(&:name).sort.to_sentence}"
-      models = models.reject { |model| model.abstract_class? }
-      puts "#{models.size} non-abstract class models:\n  #{models.map(&:name).sort.to_sentence}"
-      models.each do |model|
-        puts "Examining #{model.name}"
-        examine(model)
-      end
-      code = "module #{module_name}\n\n"
-      @declarations.each_pair do |model,associations|
-        code << "  #{model.name}.class_eval do \n" 
-        associations.each_pair do |association_id,declaration| 
-          code << "    #{declaration}\n"
-        end
-        code << "  end\n\n"
-      end
-      code << "end\n"
-      File.new(code_path, 'w+').write(code)
-      puts "Generated #{@declarations.sum(&:size)} declarations for #{@declarations.size} classes in #{code_path}"
-    end
-
-    def is_sti? model
-      model.inheritance_column.present? and model.columns.include? model.inheritance_column
-    rescue
-      false
+      @models = ::ActiveRecord::Base.send(:subclasses)
+      filter_models!
+      examine_models
+      build_declarations
     end
 
     # Make sure all models are loaded - without reloading any that
@@ -67,6 +43,53 @@ module ActiveSchema
       @declarations[model] ||= {}
       @declarations[model][declaration_id.to_sym] = code
     end
+
+    def filter_models!
+      puts "#{@models.size} candidate models:\n  #{@models.map(&:name).sort.to_sentence}"
+      reject_models "abstract class models" do |models|
+        models.select { |model| model.abstract_class? }
+      end
+      reject_models "STI class models" do |models|
+        models.select { |model| model != model.base_class }
+      end
+      reject_models "models without tables" do |models|
+        models.select { |model| not model.table_exists? }
+      end
+    end
+
+    def reject_models(desc)
+      reject = yield @models
+      puts "Rejecting #{reject.count} #{desc}:\n #{reject.map(&:name).sort.to_sentence}"
+      @models = @models - reject
+    end
+
+    def examine_models
+      @models.each do |model|
+        puts "Examining #{model.name}"
+        examine(model)
+      end
+    end
+
+    def build_declarations
+      code = "module #{module_name}\n\n"
+      @declarations.each_pair do |model,associations|
+        code << "  #{model.name}.class_eval do \n"
+        associations.each_pair do |association_id,declaration|
+          code << "    #{declaration}\n"
+        end
+        code << "  end\n\n"
+      end
+      code << "end\n"
+      File.new(code_path, 'w+').write(code)
+      puts "Generated #{@declarations.sum(&:size)} declarations for #{@declarations.size} classes in #{code_path}"
+    end
+
+    def table_model_map
+      returning Hash.new do |map|
+        @models.each {|model| map[model.table_name] = model}
+      end
+    end
+    memoize :table_model_map
     
   end
 end
