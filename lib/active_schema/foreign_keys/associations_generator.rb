@@ -25,6 +25,10 @@ module ActiveSchema
           column = columns[column_name]
           association_id = $1.to_sym
           references_class = table_model_map[foreign_key.references_table_name]
+          if references_class.nil?
+            report_no_model_for_table(foreign_key.references_table_name)
+            next
+          end
           references_class_name = references_class.name
           # belongs_to
           record_association model, :belongs_to, association_id, { :class_name => references_class_name, :foreign_key => column_name }
@@ -56,12 +60,16 @@ module ActiveSchema
               association_id = association_id.pluralize.to_sym
               record_association model, :has_and_belongs_to_many, association_id, {:class_name => referencing_class.name, :join_table => foreign_key.table_name}
             else
-              puts "FAILED: could not find model for table: #{foreign_key.table_name}"
+              report_no_model_for_table(foreign_key.table_name)
             end
           end
         end
       end
+
+      def report_no_model_for_table(table_name)
+        puts "\tfailed: could not find model for table #{table_name}"
+      end
+
     end
-    
   end
 end
