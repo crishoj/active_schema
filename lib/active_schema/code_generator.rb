@@ -64,7 +64,7 @@ module ActiveSchema
     end
 
     def examine_models
-      @models.each do |model|
+      @models.sort_by(&:name).each do |model|
         puts "Examining #{model.name}"
         examine(model)
       end
@@ -72,11 +72,13 @@ module ActiveSchema
 
     def build_declarations
       code = "module #{module_name}\n\n"
-      @declarations.each_pair do |model,associations|
+      @declarations.sort_by { |model, associations|
+        model.name
+      }.each do |model,associations|
         code << "  #{model.name}.class_eval do \n"
-        associations.each_pair do |association_id,declaration|
-          code << "    #{declaration}\n"
-        end
+        code << associations.values.collect do |declaration|
+          "    #{declaration}"
+        end.sort*"\n"
         code << "  end\n\n"
       end
       code << "end\n"
