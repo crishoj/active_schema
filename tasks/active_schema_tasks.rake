@@ -3,6 +3,10 @@ namespace :active_schema do
     task :associations => :environment do
       ActiveSchema::ForeignKeys::AssociationsGenerator.new.regenerate
     end
+
+    task :validations => :environment do
+      ActiveSchema::Constraints::ValidationsGenerator.new.regenerate
+    end
   end
 
   namespace :update do
@@ -15,8 +19,10 @@ namespace :active_schema do
     end
 
     desc "generate validations from table constraints"
-    task :validations => :environment do
-      ActiveSchema::Constraints::ValidationsGenerator.new.regenerate
+    task :validations do
+      stale = "#{RAILS_ROOT}/lib/generated_validations.rb"
+      File.unlink(stale) if File.exists?(stale)
+      Rake::Task['active_schema:generate:validations'].invoke
     end
 
   end
